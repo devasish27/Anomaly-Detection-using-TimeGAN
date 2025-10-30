@@ -55,13 +55,13 @@ This project leverages an IIoT Edge Computing dataset to:
 
 ## Team Members
 
-Devasish Sai Pothumudi 
-Narasingu Sai Suchendar
-Saumya Singh 
-Kajal Tiwari 
-PranayNigam
-Sangeeth M
-Sharon jacquiline S
+- Devasish Sai Pothumudi 
+- Narasingu Sai Suchendar
+- Saumya Singh 
+- Kajal Tiwari 
+- PranayNigam
+- Sangeeth M
+- Sharon jacquiline S
 
 ## Deployment output:
 <img width="1884" height="862" alt="Screenshot 2025-10-29 213622" src="https://github.com/user-attachments/assets/b0d8242b-6138-4c59-90cf-ebcd12e8e067" />
