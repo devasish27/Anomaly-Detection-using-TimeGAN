@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Synthetic Time-Series Generation & Anomaly Detector</title>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* ----------------- Global ----------------- */
+    :root{
+      --bg-1: #07102b;
+      --bg-2: #09122f;
+      --accent-1: #00e6ff;
+      --accent-2: #8a2be2;
+      --glass: rgba(255,255,255,0.04);
+      --muted: rgba(255,255,255,0.6);
+      --card-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: radial-gradient(1200px 400px at 10% 10%, rgba(138,43,226,0.12), transparent 10%),
+                  radial-gradient(1000px 300px at 90% 90%, rgba(0,230,255,0.06), transparent 12%),
+                  linear-gradient(180deg,var(--bg-1) 0%, var(--bg-2) 100%);
+      color: #E8F7FF;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      padding: 36px;
+    }
+
+    /* ----------------- Layout ----------------- */
+    .wrap{
+      max-width:1200px;
+      margin: 0 auto;
+      display:grid;
+      grid-template-columns: 420px 1fr;
+      gap: 28px;
+      align-items:start;
+    }
+
+    /* ----------------- Left panel (controls) ----------------- */
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius: 14px;
+      padding: 22px;
+      box-shadow: var(--card-shadow);
+      border: 1px solid rgba(255,255,255,0.03);
+      position: relative;
+      overflow: hidden;
+      min-height: 640px;
+    }
+    .brand{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      margin-bottom: 12px;
+    }
+    .logo{
+      width:56px;height:56px;border-radius:12px;
+      background: linear-gradient(135deg,var(--accent-1),var(--accent-2));
+      display:flex;align-items:center;justify-content:center;font-weight:800;color:#001;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+      transform:rotate(-8deg);
+      font-family:monospace;
+    }
+    .title{
+      font-size:1.05rem;
+      line-height:1;
+    }
+    .subtitle{font-size:0.85rem;color:var(--muted);margin-top:4px}
+
+    .section{
+      margin-top:18px;
+    }
+    label{display:block;color:var(--muted);font-size:0.78rem;margin-bottom:8px}
+    .inputs{
+      display:flex;flex-wrap:wrap;gap:10px;
+    }
+    .inputs input[type="number"]{
+      width: calc(50% - 5px);
+      padding:10px 12px;border-radius:9px;border:1px solid rgba(255,255,255,0.04);
+      background: rgba(255,255,255,0.02); color:#E8F7FF;
+    }
+    .btn{
+      display:inline-flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;
+      border:none;cursor:pointer;background:linear-gradient(90deg,var(--accent-1),var(--accent-2));
+      color:#001;font-weight:700;margin-top:12px;
+      box-shadow: 0 8px 30px rgba(138,43,226,0.12);
+    }
+    .muted-note{font-size:0.78rem;color:var(--muted);margin-top:8px}
+
+    /* file upload */
+    .file-drop{
+      margin-top:10px;padding:14px;border-radius:10px;border:1px dashed rgba(255,255,255,0.05);
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+      text-align:center;color:var(--muted); cursor:pointer;
+    }
+
+    /* small cards */
+    .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px}
+    .stat{
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);
+      text-align:left;
+    }
+    .stat .num{font-size:1.2rem;font-weight:700}
+    .stat .lbl{font-size:0.78rem;color:var(--muted)}
+
+    /* ----------------- Right panel (visualization) ----------------- */
+    .board{
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+      border-radius: 14px;padding:20px; min-height:640px; box-shadow:var(--card-shadow);
+      border: 1px solid rgba(255,255,255,0.03);
+      display:flex;flex-direction:column;gap:18px;
+    }
+    .hero{
+      display:flex;gap:16px;align-items:center;justify-content:space-between;
+    }
+    .proj-title{
+      font-size:1.25rem;font-weight:800;
+      letter-spacing:0.4px;
+    }
+    .proj-desc{color:var(--muted);font-size:0.92rem}
+
+    .charts{
+      display:grid;grid-template-columns:1fr 1fr;gap:14px;
+    }
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+      padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);
+      min-height:220px;
+    }
+
+    canvas{width:100% !important;height:220px !important}
+
+    .footer{
+      margin-top:auto;padding-top:8px;border-top:1px dashed rgba(255,255,255,0.02);display:flex;justify-content:space-between;align-items:center;
+      color:var(--muted);font-size:0.9rem;
+    }
+
+    /* responsive */
+    @media (max-width:980px){
+      .wrap{grid-template-columns:1fr; padding-bottom:60px}
+      .charts{grid-template-columns:1fr}
+      .inputs input[type="number"]{width:100%}
+      .stat-grid{grid-template-columns:repeat(3,1fr)}
+    }
+
+    /* subtle animated scanline overlay */
+    .panel::after{
+      content:"";position:absolute;left:-40%;top:-40%;width:200%;height:200%;
+      background: linear-gradient(90deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      transform: rotate(15deg);opacity:0.06;pointer-events:none;animation: drift 12s linear infinite;
+    }
+    @keyframes drift { from{transform:rotate(15deg) translateX(-8%)} to{transform:rotate(15deg) translateX(8%)} }
+  </style>
+</head>
+<body>
+
+  <div class="wrap">
+    <!-- ---------- LEFT: Controls ---------- -->
+    <div class="panel">
+      <div class="brand">
+        <div class="logo">CC</div>
+        <div>
+          <div class="title">Alpha — Synthetic Time-Series Generation & Anomaly Detector </div>
+          <div class="subtitle">A UI for your final-project.ipynb — simulate, upload, & detect anamolies</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <label>Quick Predict — enter a short time-series (4 values shown, adjust as needed)</label>
+        <div class="inputs" id="manual-inputs">
+          <input type="number" id="v0" placeholder="value 1" step="any" />
+          <input type="number" id="v1" placeholder="value 2" step="any" />
+          <input type="number" id="v2" placeholder="value 3" step="any" />
+          <input type="number" id="v3" placeholder="value 4" step="any" />
+        </div>
+        <button class="btn" id="btn-predict">🔍 Predict</button>
+        <div class="muted-note">Prediction sends values to <code>/predict</code> (POST). If backend is missing, demo result shown.</div>
+      </div>
+
+      <div class="section">
+        <label>Upload CSV for batch detection</label>
+        <div class="file-drop" id="file-drop">Click or drop a CSV here — columns: timestep, sensor1, sensor2, ...</div>
+        <input type="file" id="csv-file" accept=".csv" style="display:none"/>
+        <button class="btn" id="btn-upload" style="margin-top:10px">📤 Upload & Detect</button>
+        <div class="muted-note">Upload posts to <code>/upload</code>. Backend should return JSON array of results.</div>
+      </div>
+
+      <div class="section">
+        <label>Generate synthetic sequence</label>
+        <div style="display:flex;gap:10px;">
+          <input type="number" id="s-len" value="24" min="4" style="width:110px;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.02);" />
+          <select id="s-mode" style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.01);color:#E8F7FF;">
+            <option value="sine">Sine + Noise</option>
+            <option value="random">Random Walk</option>
+            <option value="trend">Trend + Noise</option>
+          </select>
+          <button class="btn" id="btn-gen">✨ Generate</button>
+        </div>
+        <div class="muted-note">Generates demo time-series to inspect the detector behavior locally.</div>
+      </div>
+
+      <div class="section stat-grid">
+        <div class="stat">
+          <div class="num" id="stat-count">—</div>
+          <div class="lbl">Total samples processed</div>
+        </div>
+        <div class="stat">
+          <div class="num" id="stat-anom">—</div>
+          <div class="lbl">Anomalies detected</div>
+        </div>
+        <div class="stat">
+          <div class="num" id="stat-last">—</div>
+          <div class="lbl">Last MSE</div>
+        </div>
+        <div class="stat">
+          <div class="num" id="stat-th">0.05</div>
+          <div class="lbl">Threshold (demo)</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div style="margin-top:6px;color:var(--muted);font-size:0.82rem">
+          Tip: Hook <code>/get_metrics</code> to load your training accuracy/loss history and replace the demo graph.
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- RIGHT: Visualization & Charts ---------- -->
+    <div class="board">
+      <div class="hero">
+        <div>
+          <div class="proj-title">Synthetic Time-Series Generation & Anomaly Detection using TimeGAN</div>
+          <div class="proj-desc">Visualize training metrics, run live predictions, and inspect synthetic sequences — built to integrate with your final-project.ipynb Flask server.</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:700;color:var(--accent-1)">Status: <span id="srv-status">Demo</span></div>
+          <div style="font-size:0.85rem;color:var(--muted)">Connected: <span id="srv-url">local</span></div>
+        </div>
+      </div>
+
+      <div class="charts">
+        <div class="card">
+          <h4 style="margin:0 0 10px 0">Accuracy (Train vs Val)</h4>
+          <canvas id="accuracyChart"></canvas>
+        </div>
+        <div class="card">
+          <h4 style="margin:0 0 10px 0">Loss (Train vs Val)</h4>
+          <canvas id="lossChart"></canvas>
+        </div>
+
+        <div class="card" style="grid-column:1 / -1;">
+          <h4 style="margin:0 0 10px 0">Sequence Viewer & Prediction Output</h4>
+          <canvas id="seqChart" style="height:260px;"></canvas>
+          <div style="display:flex;gap:12px;margin-top:10px;align-items:center">
+            <div id="pred-output" style="font-weight:700;color:#fff">Result: —</div>
+            <div style="color:var(--muted)">MSE: <span id="pred-mse">—</span></div>
+            <div style="margin-left:auto;color:var(--muted)">Epochs: <span id="metric-epochs">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div>Made with ♥ by <strong>Alpha</strong> · Final Project UI</div>
+        <div style="font-size:0.85rem;color:var(--muted)">Tip: Run Flask with <code>python app.py</code> and ensure endpoints match</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ----------------- Helper: Demo metrics (fallback) ----------------- */
+    const demoMetrics = (() => {
+      const E = 30;
+      const epochs = Array.from({length:E}, (_,i) => i+1);
+      const accuracy = epochs.map((e,i) => 0.65 + (i/(E-1))*0.33 + Math.random()*0.01);
+      const val_accuracy = epochs.map((e,i) => 0.62 + (i/(E-1))*0.31 + (Math.random()*0.01 - 0.005));
+      const loss = epochs.map((e,i) => 0.5 - (i/(E-1))*0.45 + Math.random()*0.01);
+      const val_loss = epochs.map((e,i) => 0.55 - (i/(E-1))*0.43 + Math.random()*0.01);
+      return { epochs, accuracy, val_accuracy, loss, val_loss };
+    })();
+
+    /* ----------------- Charts init ----------------- */
+    const accCtx = document.getElementById('accuracyChart').getContext('2d');
+    const lossCtx = document.getElementById('lossChart').getContext('2d');
+    const seqCtx = document.getElementById('seqChart').getContext('2d');
+
+    let accuracyChart = new Chart(accCtx, {
+      type: 'line',
+      data: {
+        labels: demoMetrics.epochs,
+        datasets: [
+          { label:'Train Acc', data: demoMetrics.accuracy, fill:false, tension:0.2, borderWidth:2, borderColor:'#00e6ff' },
+          { label:'Val Acc', data: demoMetrics.val_accuracy, fill:false, tension:0.2, borderWidth:2, borderColor:'#8a2be2' }
+        ]
+      },
+      options: { responsive:true, plugins:{legend:{labels:{color:'#dff'}}}, scales:{y:{min:0,max:1}} }
+    });
+
+    let lossChart = new Chart(lossCtx, {
+      type: 'line',
+      data: {
+        labels: demoMetrics.epochs,
+        datasets: [
+          { label:'Train Loss', data: demoMetrics.loss, fill:false, tension:0.2, borderWidth:2, borderColor:'#ff9f00' },
+          { label:'Val Loss', data: demoMetrics.val_loss, fill:false, tension:0.2, borderWidth:2, borderColor:'#ff6b6b' }
+        ]
+      },
+      options: { responsive:true, plugins:{legend:{labels:{color:'#dff'}}}, scales:{y:{min:0}} }
+    });
+
+    let seqChart = new Chart(seqCtx, {
+      type:'line',
+      data:{ labels:[], datasets:[
+        { label:'Sensor 1', data:[], fill:false, borderColor:'#00e6ff', tension:0.2 },
+        { label:'Sensor 2', data:[], fill:false, borderColor:'#8a2be2', tension:0.2 }
+      ]},
+      options:{ responsive:true, plugins:{legend:{labels:{color:'#dff'}}}, scales:{y:{}} }
+    });
+
+    /* ----------------- DOM helpers ----------------- */
+    const fileDrop = document.getElementById('file-drop');
+    const csvInput = document.getElementById('csv-file');
+    const btnUpload = document.getElementById('btn-upload');
+    const btnPredict = document.getElementById('btn-predict');
+    const btnGen = document.getElementById('btn-gen');
+    const statCount = document.getElementById('stat-count');
+    const statAnom  = document.getElementById('stat-anom');
+    const statLast  = document.getElementById('stat-last');
+    const predOutput= document.getElementById('pred-output');
+    const predMse   = document.getElementById('pred-mse');
+
+    let processedCount = 0, anomalyCount = 0;
+
+    /* ----------------- File drop handlers ----------------- */
+    fileDrop.addEventListener('click', () => csvInput.click());
+    fileDrop.addEventListener('dragover', (e) => { e.preventDefault(); fileDrop.style.borderColor = '#00e6ff'; });
+    fileDrop.addEventListener('dragleave', (e) => { e.preventDefault(); fileDrop.style.borderColor = 'rgba(255,255,255,0.05)'; });
+    fileDrop.addEventListener('drop', (e) => {
+      e.preventDefault();
+      fileDrop.style.borderColor = 'rgba(255,255,255,0.05)';
+      const file = e.dataTransfer.files[0];
+      if (file) handleCSVFile(file);
+    });
+
+    csvInput.addEventListener('change', (ev) => {
+      const file = ev.target.files[0];
+      if (file) handleCSVFile(file);
+    });
+
+    btnUpload.addEventListener('click', () => {
+      const file = csvInput.files[0];
+      if (!file) return alert('Please choose a CSV file or drop it in the area above.');
+      handleCSVFile(file);
+    });
+
+    /* ----------------- CSV parsing (simple) & send to backend /upload ----------------- */
+    function handleCSVFile(file){
+      const reader = new FileReader();
+      reader.onload = function(e){
+        const text = e.target.result;
+        // naive CSV parse: split rows and parse floats (assumes header present)
+        const lines = text.trim().split(/\r?\n/);
+        const header = lines[0].split(',').map(s => s.trim());
+        const data = lines.slice(1).map(r => r.split(',').map(x => parseFloat(x)));
+
+        // UI: show sample sequence in seqChart
+        const sample = data.slice(0, Math.min(24, data.length));
+        const s1 = sample.map(r => r[1] ?? r[0]);
+        const s2 = sample.map(r => r[2] ?? r[0]);
+        updateSequenceChart(s1, s2);
+
+        // send to backend (if exists) — otherwise run demo detection
+        // POST to /upload expecting JSON response of { results: [{index:0, mse:..., is_anomaly:true}, ...] }
+        fetch('/upload', {
+          method:'POST',
+          body: new FormData(document.createElement('form')) // placeholder for actual implementation
+        }).then(r => {
+          if (!r.ok) throw new Error('Server upload not implemented — demo mode.');
+          return r.json();
+        }).then(result=>{
+          // integrate server response
+        }).catch(err=>{
+          // Demo processing
+          demoBatchDetect(data);
+        });
+      };
+      reader.readAsText(file);
+    }
+
+    function demoBatchDetect(data){
+      let localAnoms = 0;
+      data.forEach((row, i) => {
+        const mse = Math.abs((row[1] ?? row[0]) - (Math.mean ? Math.mean(row) : row[0])) + (Math.random()*0.02);
+        if (mse > 0.05) localAnoms++;
+        processedCount++;
+      });
+      anomalyCount += localAnoms;
+      statCount.innerText = processedCount;
+      statAnom.innerText = anomalyCount;
+      statLast.innerText = (Math.random()*0.1).toFixed(4);
+      alert(`Demo upload processed ${data.length} rows — found ${localAnoms} anomalies (demo).`);
+    }
+
+    /* ----------------- Utility: update sequence chart ----------------- */
+    function updateSequenceChart(arr1, arr2){
+      seqChart.data.labels = arr1.map((_,i) => i+1);
+      seqChart.data.datasets[0].data = arr1;
+      seqChart.data.datasets[1].data = arr2 || arr1.map(x => x*0.9 + Math.random()*0.1);
+      seqChart.update();
+    }
+
+    /* ----------------- Manual predict ----------------- */
+    btnPredict.addEventListener('click', async () => {
+      const v0 = parseFloat(document.getElementById('v0').value || 0);
+      const v1 = parseFloat(document.getElementById('v1').value || 0);
+      const v2 = parseFloat(document.getElementById('v2').value || 0);
+      const v3 = parseFloat(document.getElementById('v3').value || 0);
+      const seq = [v0,v1,v2,v3];
+
+      // show on seq chart
+      updateSequenceChart(seq, seq.map(x=>x*0.95 + Math.random()*0.03));
+
+      // send to backend /predict (POST) — expects JSON { result: "Anomaly"|"Normal", mse: 0.012 }
+      try {
+        const resp = await fetch('/predict', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ sequence: seq })
+        });
+        if (!resp.ok) throw new Error('No server response; using demo result.');
+        const json = await resp.json();
+        showPrediction(json.result ?? '—', json.mse ?? '—');
+        processedCount++;
+        if ((json.mse ?? 0) > 0.05) anomalyCount++;
+      } catch(e){
+        // Demo fallback
+        const mse = (Math.random()*0.08).toFixed(4);
+        const isAnom = parseFloat(mse) > 0.05;
+        showPrediction(isAnom ? '⚠️ Anomaly (demo)' : '✅ Normal (demo)', mse);
+        processedCount++; if (isAnom) anomalyCount++;
+      }
+      statCount.innerText = processedCount;
+      statAnom.innerText = anomalyCount;
+      statLast.innerText = predMse.innerText;
+    });
+
+    function showPrediction(text, mse){
+      predOutput.innerText = "Result: " + text;
+      predMse.innerText = (typeof mse === 'number' ? mse.toFixed(5) : mse);
+    }
+
+    /* ----------------- Synthetic generator ----------------- */
+    btnGen.addEventListener('click', ()=>{
+      const len = parseInt(document.getElementById('s-len').value || 24);
+      const mode = document.getElementById('s-mode').value;
+      const seq = generateSeq(len, mode);
+      const seq2 = seq.map(x => x*0.95 + Math.random()*0.03);
+      updateSequenceChart(seq, seq2);
+      // optionally auto-run predict on generated sequence
+    });
+
+    function generateSeq(len, mode){
+      const arr = new Array(len).fill(0).map((_,i) => {
+        const t = i/len * Math.PI*2;
+        if (mode === 'sine') return Math.sin(t*2) * (1 + Math.random()*0.1);
+        if (mode === 'random') return (i===0?0:arr[i-1] + (Math.random()-0.45)*0.4);
+        if (mode === 'trend') return (i*0.02) + Math.sin(t) * 0.5 + (Math.random()-0.5)*0.08;
+        return Math.random();
+      });
+      return arr;
+    }
+
+    /* ----------------- On load: try to fetch real metrics ----------------- */
+    async function tryFetchMetrics(){
+      try {
+        const resp = await fetch('/get_metrics');
+        if (!resp.ok) throw new Error('metrics endpoint not ready');
+        const json = await resp.json();
+        // if the server provides arrays: update charts
+        if (json.epochs){
+          accuracyChart.data.labels = json.epochs;
+          accuracyChart.data.datasets[0].data = json.accuracy;
+          accuracyChart.data.datasets[1].data = json.val_accuracy;
+          accuracyChart.update();
+
+          lossChart.data.labels = json.epochs;
+          lossChart.data.datasets[0].data = json.loss;
+          lossChart.data.datasets[1].data = json.val_loss;
+          lossChart.update();
+
+          document.getElementById('srv-status').innerText = 'Connected';
+          document.getElementById('srv-url').innerText = window.location.origin;
+          document.getElementById('metric-epochs').innerText = json.epochs.length;
+        }
+      } catch(e){
+        // keep demo metrics; show demo server status
+        document.getElementById('srv-status').innerText = 'Demo';
+        document.getElementById('srv-url').innerText = 'local (no /get_metrics)';
+        document.getElementById('metric-epochs').innerText = demoMetrics.epochs.length;
+      }
+    }
+
+    // run at start
+    tryFetchMetrics();
+  </script>
+
+</body>
+</html>
